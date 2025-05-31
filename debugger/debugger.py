@@ -3,9 +3,17 @@ import runpy
 import os
 from pathlib import Path
 import shlex
+import subprocess
+import re
 
 
 def get_cmd_list(cmd):
+    def replace_backticks(match):
+        command = match.group(1)
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    
+    cmd = re.sub(r'`([^`]+)`', replace_backticks, cmd)
     result = shlex.split(cmd)
     for idx, i in enumerate(result):
         if i == "\n":
@@ -37,30 +45,18 @@ if __name__ == "__main__":
     
     # sample command to run the script
     cmd = """
-    python train_multiscale_uncertainty.py \
-    --result_root_path "./SLO_results/stdr_bode_250530" \
-    --result_name "icdr_visionfm_1344_4cls_myunc" \
-    --loss_type my_uncertainty \
-    --fusion_layer_num 8 \
-    --model vit_base_patch16_multiscales \
-    --dataset_type slo \
-    --clip_grad 1 \
-    --num_patches "[(6,6), (5,5), (4,4), (3,3), (2,2), (1,1)]" \
-    --lora_rank 8 \
-    --lora_alpha 16 \
-    --blr 1e-3 \
-    --layer_decay 0.65 \
-    --drop_path 0.1 \
-    --epochs 50 \
-    --random_crop_perc 0.9 \
-    --nb_classes 5 \
-    --finetune "/data_A/xujialiu/checkpoints/foundation_model_weights/my_VFM_Fundus_weights.pth" \
-    --data_path /data_A/xujialiu/datasets/UWF_datasets \
-    --csv_path "/data_A/xujialiu/datasets/UWF_datasets/250530_get_model_tabular_data/icdr4_other_250530.csv" \
-    --input_size "[1344,1344]" \
-    --fm_input_size 224 \
-    --batch_size 2 \
-    --accum_iter 16
+    python train.py \
+    --result_root_path ./test_outputs \
+    --result_name test_`date +%Y%m%d_%H%M%S` \
+    --csv_path /raid0/xujialiu/DDR_seg/ddr_seg_cls.csv \
+    --data_path /raid0/xujialiu/DDR_seg/preprocess \
+    --finetune /raid0/xujialiu/checkpoints/my_VFM_Fundus_weights.pth \
+    --nb_classes_cls 4 \
+    --nb_classes_seg 4 \
+    --batch_size 32 \
+    --input_size 224 \
+    --accum_iter 1 \
+    --blr 0.001
     """
     
     main(cmd)
