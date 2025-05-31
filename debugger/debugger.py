@@ -20,11 +20,9 @@ def main(cmd):
     cmd = get_cmd_list(cmd)
 
     if cmd[0] == "python":
-        """pop up the first in the args"""
         cmd.pop(0)
 
     if cmd[0] == "-m":
-        """pop up the first in the args"""
         cmd.pop(0)
         fun = runpy.run_module
     else:
