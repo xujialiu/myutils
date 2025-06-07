@@ -178,7 +178,9 @@ def supplemental_black_area(img, border=None):
     return image, border
 
 
-def process_without_gb(img, label, radius_list, centre_list_w, centre_list_h):
+def process_without_gb(
+    img, label, radius_list=None, centre_list_w=None, centre_list_h=None
+):
     # preprocess images
     #   img : origin image
     #   tar_height: height of tar image
@@ -186,24 +188,122 @@ def process_without_gb(img, label, radius_list, centre_list_w, centre_list_h):
     #   result_img: preprocessed image
     #   borders: remove border, supplement mask
     #   mask: mask for preprocessed image
+    if not radius_list:
+        radius_list = []
+    if not centre_list_w:
+        centre_list_w = []
+    if not centre_list_h:
+        centre_list_h = []
+
     borders = []
     mask, bbox, center, radius = get_mask(img)
-    # print('center is: ',center)
-    # print('radius is: ',radius)
     r_img = mask_image(img, mask)
+
     r_img, r_border = remove_back_area(r_img, bbox=bbox)
     mask, _ = remove_back_area(mask, border=r_border)
     label, _ = remove_back_area(label, bbox=bbox)
-    borders.append(r_border)
-    r_img, sup_border = supplemental_black_area(r_img)
-    # print(r_img.shape)
-    label, sup_border = supplemental_black_area(label)
-    mask, _ = supplemental_black_area(mask, border=sup_border)
-    borders.append(sup_border)
 
+    r_img, sup_border = supplemental_black_area(r_img)
+    label, _ = supplemental_black_area(label, border=sup_border)
+    mask, _ = supplemental_black_area(mask, border=sup_border)
+
+    borders.append(r_border)
+    borders.append(sup_border)
     radius_list.append(radius)
     centre_list_w.append(int(center[0]))
     centre_list_h.append(int(center[1]))
+
+    return (
+        r_img,
+        borders,
+        (mask * 255).astype(np.uint8),
+        label,
+        radius_list,
+        centre_list_w,
+        centre_list_h,
+    )
+
+
+def process(img, radius_list=None, centre_list_w=None, centre_list_h=None):
+    # preprocess images
+    #   img : origin image
+    #   tar_height: height of tar image
+    # return:
+    #   result_img: preprocessed image
+    #   borders: remove border, supplement mask
+    #   mask: mask for preprocessed image
+    if not radius_list:
+        radius_list = []
+    if not centre_list_w:
+        centre_list_w = []
+    if not centre_list_h:
+        centre_list_h = []
+
+    borders = []
+    mask, bbox, center, radius = get_mask(img)
+    r_img = mask_image(img, mask)
+
+    r_img, r_border = remove_back_area(r_img, bbox=bbox)
+    mask, _ = remove_back_area(mask, border=r_border)
+
+    r_img, sup_border = supplemental_black_area(r_img)
+    mask, _ = supplemental_black_area(mask, border=sup_border)
+
+    borders.append(r_border)
+    borders.append(sup_border)
+    radius_list.append(radius)
+    centre_list_w.append(int(center[0]))
+    centre_list_h.append(int(center[1]))
+
+    return (
+        r_img,
+        borders,
+        (mask * 255).astype(np.uint8),
+        radius_list,
+        centre_list_w,
+        centre_list_h,
+    )
+
+
+def process_with_masks(
+    img, labels, radius_list=None, centre_list_w=None, centre_list_h=None
+):
+    # preprocess images
+    #   img : origin image
+    #   tar_height: height of tar image
+    # return:
+    #   result_img: preprocessed image
+    #   borders: remove border, supplement mask
+    #   mask: mask for preprocessed image
+    if not radius_list:
+        radius_list = []
+    if not centre_list_w:
+        centre_list_w = []
+    if not centre_list_h:
+        centre_list_h = []
+
+    borders = []
+    mask, bbox, center, radius = get_mask(img)
+    r_img = mask_image(img, mask)
+
+    r_img, r_border = remove_back_area(r_img, bbox=bbox)
+    mask, _ = remove_back_area(mask, border=r_border)
+    for idx, label in enumerate(labels):
+        label, _ = remove_back_area(label, border=r_border)
+        labels[idx] = label
+
+    r_img, sup_border = supplemental_black_area(r_img)
+    mask, _ = supplemental_black_area(mask, border=sup_border)
+    for idx, label in enumerate(labels):
+        label, _ = supplemental_black_area(label, border=sup_border)
+        labels[idx] = label
+
+    borders.append(r_border)
+    borders.append(sup_border)
+    radius_list.append(radius)
+    centre_list_w.append(int(center[0]))
+    centre_list_h.append(int(center[1]))
+
     return (
         r_img,
         borders,
