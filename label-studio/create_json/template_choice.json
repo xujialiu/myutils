@@ -1,0 +1,36 @@
+[
+    {
+        "data": {
+            "image": "/data/local-files/?d=UWF_IQA/UWF_IQA/DR/DR-079.tif",
+            "enhanced_image": "/data/local-files/?d=UWF_IQA/UWF_IQA_enhanced/DR/DR-079.tif",
+            "name": "DR-079.tif"
+        },
+        "annotations": [],
+        "predictions": [
+            {
+                "result": [
+                    {
+                        "value": {
+                            "choices": [
+                                "enhanced image"
+                            ]
+                        },
+                        "from_name": "image_type",
+                        "to_name": "image",
+                        "type": "choices"
+                    },
+                    {
+                        "value": {
+                            "choices": [
+                                "DR"
+                            ]
+                        },
+                        "from_name": "choice_type",
+                        "to_name": "image",
+                        "type": "choices"
+                    }
+                ]
+            }
+        ]
+    }
+]
