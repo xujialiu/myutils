@@ -27,7 +27,7 @@ def main(cmd):
 
     cmd = get_cmd_list(cmd)
 
-    if cmd[0] == "python":
+    if cmd[0] == "python" or cmd[0] == "python3":
         cmd.pop(0)
 
     if cmd[0] == "-m":
