@@ -8,14 +8,18 @@ def split_dataset(
     y,
     train_val_test_ratio=(0.7, 0.1, 0.2),
     X_duplicated=False,
+    train_val_test_name=("train", "val", "test"),
+    dataset_col_name="train_test",
     random_state=1,
 ):
     """
     df: 数据集
-    X: 特征列
-    y: 标签列
+    X: 样本列名
+    y: 标签列名
     train_val_test_ratio: 训练集、验证集、测试集的比例, 测试集可为0
     X_duplicated: 是否考虑X列的重复值
+    train_val_test_name: 训练集、验证集、测试集的名称
+    dataset_col_name: 数据集列名
     random_state: 随机种子
     """
     train_size, val_size, test_size = train_val_test_ratio
@@ -54,8 +58,10 @@ def split_dataset(
     val_mask = df[X].isin(val_x)
     test_mask = df[X].isin(test_x)
 
-    df["train_test"] = pd.NA
-    df.loc[train_mask, "train_test"] = "train"
-    df.loc[val_mask, "train_test"] = "val"
-    df.loc[test_mask, "train_test"] = "test"
+    df[dataset_col_name] = pd.NA
+
+    train, val, test = train_val_test_name
+    df.loc[train_mask, dataset_col_name] = train
+    df.loc[val_mask, dataset_col_name] = val
+    df.loc[test_mask, dataset_col_name] = test
     return df
