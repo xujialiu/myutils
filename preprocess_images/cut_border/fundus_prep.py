@@ -283,8 +283,13 @@ def process_with_masks(
         centre_list_h = []
 
     borders = []
+    
     mask, bbox, center, radius = get_mask(img)
+    
     r_img = mask_image(img, mask)
+    for idx, label in enumerate(labels):
+        label = mask_image(label, mask)
+        labels[idx] = label
 
     r_img, r_border = remove_back_area(r_img, bbox=bbox)
     mask, _ = remove_back_area(mask, border=r_border)
@@ -308,7 +313,7 @@ def process_with_masks(
         r_img,
         borders,
         (mask * 255).astype(np.uint8),
-        label,
+        labels,
         radius_list,
         centre_list_w,
         centre_list_h,
