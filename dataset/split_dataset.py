@@ -6,10 +6,10 @@ def split_dataset(
     df,
     X,
     y,
-    train_val_test_ratio=(0.7, 0.1, 0.2),
+    train_val_test_ratio=(0.7, 0.3, 0),
     X_duplicated=False,
     train_val_test_name=("train", "val", "test"),
-    dataset_col_name="train_test",
+    dataset_col_name="datasets",
     random_state=1,
 ):
     """
