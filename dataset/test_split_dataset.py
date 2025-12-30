@@ -697,12 +697,12 @@ class TestIntegration:
 
     def test_repeated_measurements_scenario(self):
         """Test scenario with repeated measurements per subject."""
-        # Each patient has multiple measurements
+        # Each patient has multiple measurements (8 patients, 4 per class)
         df = pd.DataFrame(
             {
-                "patient_id": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4] * 5,
-                "measurement": list(range(60)),
-                "outcome": [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] * 5,
+                "patient_id": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8] * 5,
+                "measurement": list(range(80)),
+                "outcome": [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1] * 5,
             }
         )
 

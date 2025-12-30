@@ -17,10 +17,10 @@ def _validate_ratio(ratio: Ratio) -> None:
     """Validate train/val/test ratio."""
     if len(ratio) != 3:
         raise ValueError("Ratio must have exactly 3 values (train, val, test)")
-    if sum(ratio) <= 0:
-        raise ValueError("Sum of ratios must be positive")
     if any(r < 0 for r in ratio):
         raise ValueError("All ratios must be non-negative")
+    if sum(ratio) <= 0:
+        raise ValueError("Sum of ratios must be positive")
 
 
 def _calculate_split_ratios(ratio: Ratio) -> Tuple[float, float]:
@@ -53,12 +53,16 @@ def _perform_splits(
 ) -> Tuple[List, List, List]:
     """
     Perform train/val/test splits using sklearn.
-    
+
     Returns
     -------
     tuple
         (train_x, val_x, test_x) lists
     """
+    # Edge case: all samples go to train (no split needed)
+    if train_val_ratio == 0:
+        return x_values, [], []
+
     # First split: train vs (val + test)
     if y_values is not None:
         train_x, tmp_x, _, tmp_y = train_test_split(
@@ -208,7 +212,7 @@ def _prepare_stratify_df_pl(
         if y is not None:
             df_stratify = (
                 df.group_by(X)
-                .agg(pl.col(y).mode().list.first().alias("y"))
+                .agg(pl.col(y).mode().first().alias("y"))
                 .rename({X: "x"})
             )
         else:
