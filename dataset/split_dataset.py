@@ -1,40 +1,119 @@
+from typing import List, Optional, Tuple, Union
+
 import pandas as pd
 import polars as pl
 from sklearn.model_selection import train_test_split
 
+# Type aliases
+Ratio = Tuple[float, float, float]
+Names = Tuple[str, str, str]
 
-def split_dataset_pd(
-    df,
-    X,
-    y=None,  # Made optional with default None
-    train_val_test_ratio=(0.7, 0.3, 0),
-    X_duplicated=False,
-    train_val_test_name=("train", "val", "test"),
-    dataset_col_name="datasets",
-    random_state=1,
-):
-    """
-    df: 数据集
-    X: 样本列名
-    y: 标签列名 (可选, 如果提供则进行分层抽样, 否则随机抽样)
-    train_val_test_ratio: 训练集、验证集、测试集的比例, 测试集可为0
-    X_duplicated: 是否考虑X列的重复值
-    train_val_test_name: 训练集、验证集、测试集的名称
-    dataset_col_name: 数据集列名
-    random_state: 随机种子
-    """
-    train_size, val_size, test_size = train_val_test_ratio
 
-    train_val_ratio = (val_size + test_size) / (train_size + val_size + test_size)
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def _validate_ratio(ratio: Ratio) -> None:
+    """Validate train/val/test ratio."""
+    if len(ratio) != 3:
+        raise ValueError("Ratio must have exactly 3 values (train, val, test)")
+    if sum(ratio) <= 0:
+        raise ValueError("Sum of ratios must be positive")
+    if any(r < 0 for r in ratio):
+        raise ValueError("All ratios must be non-negative")
+
+
+def _calculate_split_ratios(ratio: Ratio) -> Tuple[float, float]:
+    """
+    Calculate split ratios for two-stage splitting.
+    
+    Returns
+    -------
+    tuple
+        (train_val_ratio, val_test_ratio)
+    """
+    train_size, val_size, test_size = ratio
+    total = train_size + val_size + test_size
+
+    train_val_ratio = (val_size + test_size) / total
     val_test_ratio = (
-        (test_size) / (val_size + test_size) if (val_size + test_size) > 0 else 0
+        test_size / (val_size + test_size) 
+        if (val_size + test_size) > 0 
+        else 0.0
     )
+    return train_val_ratio, val_test_ratio
 
-    # Prepare data for splitting
+
+def _perform_splits(
+    x_values: List,
+    y_values: Optional[List],
+    train_val_ratio: float,
+    val_test_ratio: float,
+    random_state: int,
+) -> Tuple[List, List, List]:
+    """
+    Perform train/val/test splits using sklearn.
+    
+    Returns
+    -------
+    tuple
+        (train_x, val_x, test_x) lists
+    """
+    # First split: train vs (val + test)
+    if y_values is not None:
+        train_x, tmp_x, _, tmp_y = train_test_split(
+            x_values,
+            y_values,
+            test_size=train_val_ratio,
+            stratify=y_values,
+            random_state=random_state,
+        )
+    else:
+        train_x, tmp_x = train_test_split(
+            x_values,
+            test_size=train_val_ratio,
+            random_state=random_state,
+        )
+        tmp_y = None
+
+    # Second split: val vs test
+    if val_test_ratio == 0:
+        val_x = tmp_x
+        test_x = []
+    elif tmp_y is not None:
+        val_x, test_x = train_test_split(
+            tmp_x,
+            test_size=val_test_ratio,
+            stratify=tmp_y,
+            random_state=random_state + 1,
+        )
+    else:
+        val_x, test_x = train_test_split(
+            tmp_x,
+            test_size=val_test_ratio,
+            random_state=random_state + 1,
+        )
+
+    return train_x, val_x, test_x
+
+
+# =============================================================================
+# Pandas Implementation
+# =============================================================================
+
+def _prepare_stratify_df_pd(
+    df: pd.DataFrame,
+    X: str,
+    y: Optional[str],
+    X_duplicated: bool,
+) -> pd.DataFrame:
+    """Prepare stratification dataframe for pandas."""
     if X_duplicated:
         if y is not None:
             df_stratify = (
-                df.groupby(X)[y].agg(lambda x: pd.Series.mode(x)[0]).reset_index()
+                df.groupby(X)[y]
+                .agg(lambda x: pd.Series.mode(x).iloc[0])
+                .reset_index()
             )
             df_stratify.columns = ["x", "y"]
         else:
@@ -47,140 +126,160 @@ def split_dataset_pd(
         else:
             df_stratify = df[[X]].copy()
             df_stratify.columns = ["x"]
+    
+    return df_stratify
 
-    # First split: train vs (val + test)
-    stratify_col = df_stratify["y"] if y is not None else None
-    train_x, tmp_x = train_test_split(
-        df_stratify.x,
-        test_size=train_val_ratio,
-        stratify=stratify_col,
-        random_state=random_state,
+
+def split_dataset_pd(
+    df: pd.DataFrame,
+    X: str,
+    y: Optional[str] = None,
+    train_val_test_ratio: Ratio = (0.7, 0.3, 0.0),
+    X_duplicated: bool = False,
+    train_val_test_name: Names = ("train", "val", "test"),
+    dataset_col_name: str = "dataset",
+    random_state: int = 1,
+) -> pd.DataFrame:
+    """
+    Split a pandas DataFrame into train/validation/test sets.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataset.
+    X : str
+        Column name for sample identifier.
+    y : str, optional
+        Column name for labels. If provided, stratified sampling is used.
+    train_val_test_ratio : tuple of float, default=(0.7, 0.3, 0.0)
+        Ratios for (train, validation, test) sets. Test can be 0.
+    X_duplicated : bool, default=False
+        Whether to handle duplicated values in X column by grouping.
+    train_val_test_name : tuple of str, default=("train", "val", "test")
+        Names for train, validation, and test sets.
+    dataset_col_name : str, default="dataset"
+        Name of the output column indicating dataset split.
+    random_state : int, default=1
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with added dataset split column.
+    """
+    _validate_ratio(train_val_test_ratio)
+    train_val_ratio, val_test_ratio = _calculate_split_ratios(train_val_test_ratio)
+
+    # Prepare stratification data
+    df_stratify = _prepare_stratify_df_pd(df, X, y, X_duplicated)
+    
+    x_values = df_stratify["x"].tolist()
+    y_values = df_stratify["y"].tolist() if y is not None else None
+
+    # Perform splits
+    train_x, val_x, test_x = _perform_splits(
+        x_values, y_values, train_val_ratio, val_test_ratio, random_state
     )
 
-    # Second split: val vs test
-    if val_test_ratio == 0:
-        val_x = tmp_x
-        test_x = []
-    else:
-        if y is not None:
-            tmp_y = df_stratify.loc[df_stratify.x.isin(tmp_x)]["y"]
-            val_x, test_x = train_test_split(
-                tmp_x,
-                test_size=val_test_ratio,
-                stratify=tmp_y,
-                random_state=random_state + 1,
-            )
-        else:
-            val_x, test_x = train_test_split(
-                tmp_x,
-                test_size=val_test_ratio,
-                random_state=random_state + 1,
-            )
-
     # Assign dataset labels
-    train_mask = df[X].isin(train_x)
-    val_mask = df[X].isin(val_x)
-    test_mask = df[X].isin(test_x)
-
+    train_name, val_name, test_name = train_val_test_name
+    
+    df = df.copy()
     df[dataset_col_name] = pd.NA
-
-    train, val, test = train_val_test_name
-    df.loc[train_mask, dataset_col_name] = train
-    df.loc[val_mask, dataset_col_name] = val
-    df.loc[test_mask, dataset_col_name] = test
+    df.loc[df[X].isin(train_x), dataset_col_name] = train_name
+    df.loc[df[X].isin(val_x), dataset_col_name] = val_name
+    df.loc[df[X].isin(test_x), dataset_col_name] = test_name
 
     return df
 
 
-def split_dataset_pl(
+# =============================================================================
+# Polars Implementation
+# =============================================================================
+
+def _prepare_stratify_df_pl(
     df: pl.DataFrame,
     X: str,
-    y: str = None, 
-    train_val_test_ratio=(0.7, 0.3, 0),
-    X_duplicated=False,
-    train_val_test_name=("train", "val", "test"),
-    dataset_col_name="dataset",
-    random_state=1,
-):
-    """
-    df: 数据集
-    X: 样本列名
-    y: 标签列名 (可选，若提供则进行分层抽样，否则随机抽样)
-    train_val_test_ratio: 训练集、验证集、测试集的比例, 测试集可为0
-    X_duplicated: 是否考虑X列的重复值
-    train_val_test_name: 训练集、验证集、测试集的名称
-    dataset_col_name: 数据集列名
-    random_state: 随机种子
-    """
-    train_size, val_size, test_size = train_val_test_ratio
-
-    train_val_ratio = (val_size + test_size) / (train_size + val_size + test_size)
-    val_test_ratio = (
-        test_size / (val_size + test_size) if (val_size + test_size) > 0 else 0
-    )
-
-    # Prepare data for splitting
+    y: Optional[str],
+    X_duplicated: bool,
+) -> pl.DataFrame:
+    """Prepare stratification dataframe for polars."""
     if X_duplicated:
         if y is not None:
-            # Group by X and get mode of y
             df_stratify = (
                 df.group_by(X)
                 .agg(pl.col(y).mode().list.first().alias("y"))
                 .rename({X: "x"})
             )
         else:
-            # Just get unique X values
             df_stratify = df.select(pl.col(X).unique().alias("x"))
     else:
         if y is not None:
-            df_stratify = df.select([pl.col(X).alias("x"), pl.col(y).alias("y")])
+            df_stratify = df.select([
+                pl.col(X).alias("x"), 
+                pl.col(y).alias("y")
+            ])
         else:
             df_stratify = df.select(pl.col(X).alias("x"))
+    
+    return df_stratify
 
-    # Convert to lists for sklearn
-    stratify_x = df_stratify.get_column("x").to_list()
-    stratify_y = df_stratify.get_column("y").to_list() if y is not None else None
 
-    # First split: train vs (val + test)
-    if y is not None:
-        train_x, tmp_x, _, tmp_y = train_test_split(
-            stratify_x,
-            stratify_y,
-            test_size=train_val_ratio,
-            stratify=stratify_y,
-            random_state=random_state,
-        )
-    else:
-        train_x, tmp_x = train_test_split(
-            stratify_x,
-            test_size=train_val_ratio,
-            random_state=random_state,
-        )
-        tmp_y = None
+def split_dataset_pl(
+    df: pl.DataFrame,
+    X: str,
+    y: Optional[str] = None,
+    train_val_test_ratio: Ratio = (0.7, 0.3, 0.0),
+    X_duplicated: bool = False,
+    train_val_test_name: Names = ("train", "val", "test"),
+    dataset_col_name: str = "dataset",
+    random_state: int = 1,
+) -> pl.DataFrame:
+    """
+    Split a Polars DataFrame into train/validation/test sets.
 
-    # Second split: val vs test
-    if val_test_ratio == 0:
-        val_x = tmp_x
-        test_x = []
-    else:
-        if y is not None:
-            val_x, test_x = train_test_split(
-                tmp_x,
-                test_size=val_test_ratio,
-                stratify=tmp_y,
-                random_state=random_state + 1,
-            )
-        else:
-            val_x, test_x = train_test_split(
-                tmp_x,
-                test_size=val_test_ratio,
-                random_state=random_state + 1,
-            )
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Input dataset.
+    X : str
+        Column name for sample identifier.
+    y : str, optional
+        Column name for labels. If provided, stratified sampling is used.
+    train_val_test_ratio : tuple of float, default=(0.7, 0.3, 0.0)
+        Ratios for (train, validation, test) sets. Test can be 0.
+    X_duplicated : bool, default=False
+        Whether to handle duplicated values in X column by grouping.
+    train_val_test_name : tuple of str, default=("train", "val", "test")
+        Names for train, validation, and test sets.
+    dataset_col_name : str, default="dataset"
+        Name of the output column indicating dataset split.
+    random_state : int, default=1
+        Random seed for reproducibility.
 
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with added dataset split column.
+    """
+    _validate_ratio(train_val_test_ratio)
+    train_val_ratio, val_test_ratio = _calculate_split_ratios(train_val_test_ratio)
+
+    # Prepare stratification data
+    df_stratify = _prepare_stratify_df_pl(df, X, y, X_duplicated)
+    
+    x_values = df_stratify.get_column("x").to_list()
+    y_values = df_stratify.get_column("y").to_list() if y is not None else None
+
+    # Perform splits
+    train_x, val_x, test_x = _perform_splits(
+        x_values, y_values, train_val_ratio, val_test_ratio, random_state
+    )
+
+    # Assign dataset labels
     train_name, val_name, test_name = train_val_test_name
 
-    # Create the dataset column using when/then/otherwise
-    df = df.with_columns(
+    return df.with_columns(
         pl.when(pl.col(X).is_in(train_x))
         .then(pl.lit(train_name))
         .when(pl.col(X).is_in(val_x))
@@ -191,4 +290,70 @@ def split_dataset_pl(
         .alias(dataset_col_name)
     )
 
-    return df
+
+# =============================================================================
+# Unified Interface
+# =============================================================================
+
+def split_dataset(
+    df: Union[pd.DataFrame, pl.DataFrame],
+    X: str,
+    y: Optional[str] = None,
+    train_val_test_ratio: Ratio = (0.7, 0.3, 0.0),
+    X_duplicated: bool = False,
+    train_val_test_name: Names = ("train", "val", "test"),
+    dataset_col_name: str = "dataset",
+    random_state: int = 1,
+) -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Split a DataFrame into train/validation/test sets.
+
+    Automatically detects pandas or polars DataFrame and calls
+    the appropriate implementation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame or pl.DataFrame
+        Input dataset.
+    X : str
+        Column name for sample identifier.
+    y : str, optional
+        Column name for labels. If provided, stratified sampling is used.
+    train_val_test_ratio : tuple of float, default=(0.7, 0.3, 0.0)
+        Ratios for (train, validation, test) sets. Test can be 0.
+    X_duplicated : bool, default=False
+        Whether to handle duplicated values in X column by grouping.
+    train_val_test_name : tuple of str, default=("train", "val", "test")
+        Names for train, validation, and test sets.
+    dataset_col_name : str, default="dataset"
+        Name of the output column indicating dataset split.
+    random_state : int, default=1
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    pd.DataFrame or pl.DataFrame
+        DataFrame with added dataset split column.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame({"id": range(100), "label": [0]*50 + [1]*50})
+    >>> result = split_dataset(df, X="id", y="label")
+    >>> result["dataset"].value_counts()
+    """
+    kwargs = {
+        "X": X,
+        "y": y,
+        "train_val_test_ratio": train_val_test_ratio,
+        "X_duplicated": X_duplicated,
+        "train_val_test_name": train_val_test_name,
+        "dataset_col_name": dataset_col_name,
+        "random_state": random_state,
+    }
+
+    if isinstance(df, pd.DataFrame):
+        return split_dataset_pd(df, **kwargs)
+    elif isinstance(df, pl.DataFrame):
+        return split_dataset_pl(df, **kwargs)
+    else:
+        raise TypeError(f"Unsupported DataFrame type: {type(df).__name__}")
