@@ -1,6 +1,6 @@
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 
 # Type aliases
 Ratio = Tuple[float, float, float]
@@ -91,3 +91,43 @@ def _perform_splits(
         )
 
     return train_x, val_x, test_x
+
+
+def _perform_fold_splits(
+    x_values: List,
+    y_values: Optional[List],
+    num_folds: int,
+    random_state: int,
+) -> Dict[Any, int]:
+    """
+    Assign fold indices to x_values using KFold or StratifiedKFold.
+
+    Parameters
+    ----------
+    x_values : list
+        List of unique sample identifiers.
+    y_values : list, optional
+        List of labels for stratification. If provided, uses StratifiedKFold.
+    num_folds : int
+        Number of folds.
+    random_state : int
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    dict
+        Mapping from x_value to fold index (0 to num_folds-1).
+    """
+    if y_values is not None:
+        kfold = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=random_state)
+        splits = kfold.split(x_values, y_values)
+    else:
+        kfold = KFold(n_splits=num_folds, shuffle=True, random_state=random_state)
+        splits = kfold.split(x_values)
+
+    fold_map = {}
+    for fold_idx, (_, val_indices) in enumerate(splits):
+        for idx in val_indices:
+            fold_map[x_values[idx]] = fold_idx
+
+    return fold_map

@@ -6,6 +6,7 @@ from ._split_utils import (
     Names,
     Ratio,
     _calculate_split_ratios,
+    _perform_fold_splits,
     _perform_splits,
     _validate_ratio,
 )
@@ -98,3 +99,47 @@ def split_dataset(
         .otherwise(pl.lit(None))
         .alias(dataset_col_name)
     )
+
+
+def split_dataset_folds(
+    df: pl.DataFrame,
+    X: str,
+    y: Optional[str] = None,
+    X_duplicated: bool = False,
+    num_folds: int = 5,
+    folds_col_name: str = "fold",
+    random_state: int = 1,
+) -> pl.DataFrame:
+    """
+    Assign each sample to one of num_folds folds for k-fold cross-validation.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Input dataset.
+    X : str
+        Column name for sample identifier.
+    y : str, optional
+        Column name for labels. If provided, uses StratifiedKFold.
+    X_duplicated : bool, default=False
+        Whether to handle duplicated values in X column by grouping.
+    num_folds : int, default=5
+        Number of folds for cross-validation.
+    folds_col_name : str, default="fold"
+        Name of the output column indicating fold assignment.
+    random_state : int, default=1
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with added fold column (integers 0 to num_folds-1).
+    """
+    df_stratify = _prepare_stratify_df(df, X, y, X_duplicated)
+
+    x_values = df_stratify.get_column("x").to_list()
+    y_values = df_stratify.get_column("y").to_list() if y is not None else None
+
+    fold_map = _perform_fold_splits(x_values, y_values, num_folds, random_state)
+
+    return df.with_columns(pl.col(X).replace(fold_map).alias(folds_col_name))
