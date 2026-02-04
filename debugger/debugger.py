@@ -123,13 +123,25 @@ def main(cmd):
 
 if __name__ == "__main__":
     cmd = """
-export nnUNet_raw="/data_B/xujialiu/projects/nnunet/nnUNet_raw"
-export nnUNet_preprocessed="/data_B/xujialiu/projects/nnunet/nnUNet_preprocessed"
-export nnUNet_results="/data_B/xujialiu/projects/nnunet/nnUNet_results"
+    
+export test_var="hello world"
 
+echo $test_var
+num_dataset=0    
+
+python test.py
+
+export test_var="hello world"
+
+echo $test_var
 num_dataset=0
 
-CUDA_VISIBLE_DEVICES=1 python /data_B/xujialiu/projects/nnunet/nnUNetv2_train.py $num_dataset 2d 0 --npz
+python test.py
+
+export test_var="hello world"
+
+echo $test_var
+num_dataset=0
     """
     
     main(cmd)

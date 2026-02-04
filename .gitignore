@@ -1,5 +1,8 @@
 **/test_whatever*
 
+test/
+.worktree/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
